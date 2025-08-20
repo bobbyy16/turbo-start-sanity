@@ -1,5 +1,3 @@
-// apps/web/src/app/blog/[slug]/page.tsx
-
 import { notFound } from "next/navigation";
 import { stegaClean } from "next-sanity";
 
@@ -35,9 +33,17 @@ async function fetchBlogPaths() {
   return paths;
 }
 
-export async function generateMetadata(props: { params: { slug: string } }) {
-  const { slug } = props.params;
-  const { data } = await fetchBlogSlugPageData(slug, false);
+interface BlogSlugParams {
+  slug: string;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<BlogSlugParams>;
+}) {
+  const resolvedParams = await params;
+  const { data } = await fetchBlogSlugPageData(resolvedParams.slug, false);
 
   return getSEOMetadata(
     data
@@ -57,11 +63,13 @@ export async function generateStaticParams(): Promise<{ slug: string }[]> {
   return await fetchBlogPaths();
 }
 
-export default async function BlogSlugPage(props: {
-  params: { slug: string };
+export default async function BlogSlugPage({
+  params,
+}: {
+  params: Promise<BlogSlugParams>;
 }) {
-  const { slug } = props.params;
-  const { data } = await fetchBlogSlugPageData(slug);
+  const resolvedParams = await params;
+  const { data } = await fetchBlogSlugPageData(resolvedParams.slug);
 
   if (!data) return notFound();
 
