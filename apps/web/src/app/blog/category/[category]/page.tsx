@@ -5,12 +5,22 @@ import { sanityFetch } from "@/lib/sanity/live";
 import { queryBlogPostsByCategory } from "@/lib/sanity/query";
 import BlogListWithFilters from "@/components/BlogWithFilters";
 
-interface Props {
-  params: { category: string };
+interface CategoryParams {
+  category: string;
 }
 
-export default async function BlogCategoryPage({ params }: Props) {
-  const categorySlug = params.category;
+export async function generateStaticParams(): Promise<CategoryParams[]> {
+  // You might need to fetch categories here
+  return []; // Return appropriate categories
+}
+
+export default async function BlogCategoryPage({
+  params,
+}: {
+  params: Promise<CategoryParams>;
+}) {
+  const resolvedParams = await params;
+  const categorySlug = resolvedParams.category;
 
   const { data: result } = await sanityFetch({
     query: queryBlogPostsByCategory,
