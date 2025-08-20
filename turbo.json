@@ -13,11 +13,17 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "dist/**",
-        ".sanity/**"
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", ".sanity/**"],
+      "env": [
+        "ALGOLIA_ADMIN_KEY",
+        "ALGOLIA_APP_ID",
+        "SANITY_STUDIO_PROJECT_ID",
+        "SANITY_STUDIO_DATASET",
+        "SANITY_DEPLOY_TOKEN",
+        "SANITY_STUDIO_TITLE",
+        "SANITY_STUDIO_PRESENTATION_URL",
+        "SANITY_STUDIO_PRODUCTION_HOSTNAME",
+        "PNPM_ENABLE_PKG_BUILD_SCRIPTS"
       ]
     },
     "lint": {
