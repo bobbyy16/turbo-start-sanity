@@ -4,20 +4,15 @@ import { useState, useMemo, useEffect } from "react";
 import { BlogCard, FeaturedBlogCard } from "@/components/blog-card";
 import Search from "@/components/Search";
 import { usePathname } from "next/navigation";
+import type { QueryBlogIndexPageDataResult } from "@/lib/sanity/sanity.types";
+import { Category } from "@/types/blog";
 
-interface Category {
-  _id: string;
-  title: string;
-  slug: string;
-}
-
-interface Blog {
-  _id: string;
-  title: string;
-  excerpt?: string;
-  slug: string;
+// Use the proper Blog type instead of the simplified interface
+type Blog = NonNullable<
+  NonNullable<QueryBlogIndexPageDataResult>["blogs"]
+>[number] & {
   categories?: Category[];
-}
+};
 
 export default function BlogListWithFilters({
   blogs,
