@@ -8,25 +8,31 @@ import {
   unsplashImageAsset,
 } from "sanity-plugin-asset-source-unsplash";
 import { iconPicker } from "sanity-plugin-icon-picker";
-import { media, mediaAssetSource } from "sanity-plugin-media";
+import { media } from "sanity-plugin-media";
 
 import { Logo } from "./components/logo";
 import { locations } from "./location";
 import { presentationUrl } from "./plugins/presentation-url";
 import { schemaTypes } from "./schemaTypes";
 import { structure } from "./structure";
-import { createPageTemplate, getPresentationUrl } from "./utils/helper";
+import { createPageTemplate } from "./utils/helper";
 
+// 🔑 Resolve env vars *once at build-time*, never in browser
 const projectId = process.env.SANITY_STUDIO_PROJECT_ID ?? "";
-const dataset = process.env.SANITY_STUDIO_DATASET;
-const title = process.env.SANITY_STUDIO_TITLE;
+const dataset = process.env.SANITY_STUDIO_DATASET ?? "production";
+const title = process.env.SANITY_STUDIO_TITLE ?? "Turbo Studio";
+
+const previewOrigin =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : process.env.SANITY_STUDIO_PRESENTATION_URL || "/";
 
 export default defineConfig({
   name: "default",
-  title: title ?? "Turbo Studio",
-  projectId: projectId,
+  title,
+  projectId,
   icon: Logo,
-  dataset: dataset ?? "production",
+  dataset,
   mediaLibrary: {
     enabled: true,
   },
@@ -36,7 +42,7 @@ export default defineConfig({
         locations,
       },
       previewUrl: {
-        origin: getPresentationUrl(),
+        origin: previewOrigin,
         previewMode: {
           enable: "/api/presentation-draft",
         },
@@ -58,12 +64,12 @@ export default defineConfig({
       assetSources: (sources) =>
         sources.filter((source) => source.name !== "sanity-default"),
     },
-    // Disable the default for file assets
     file: {
       assetSources: (sources) =>
         sources.filter((source) => source.name !== "sanity-default"),
     },
   },
+
   document: {
     newDocumentOptions: (prev, { creationContext }) => {
       const { type } = creationContext;
@@ -71,6 +77,7 @@ export default defineConfig({
       return prev;
     },
   },
+
   schema: {
     types: schemaTypes,
     templates: createPageTemplate(),
