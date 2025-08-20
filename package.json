@@ -24,6 +24,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@algolia/client-search": "^5.35.0",
     "@sanity/client": "^7.6.0",
     "@types/react-instantsearch": "^7.0.0",
     "@types/react-instantsearch-dom": "^6.12.9",

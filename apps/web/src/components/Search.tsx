@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { searchClient } from "@/lib/algolia";
 import Link from "next/link";
+import { SearchResponse } from "@algolia/client-search";
 
 interface BlogPost {
   objectID: string;
@@ -33,11 +34,20 @@ export default function Search() {
     setLoading(true);
     const timeout = setTimeout(async () => {
       try {
-        const response = await searchClient.search({
-          requests: [{ indexName: "blogs_with_relations", query }],
-        });
+        const response = await searchClient.search([
+          {
+            indexName: "blogs_with_relations",
+            query,
+            params: {
+              hitsPerPage: 20,
+            },
+          } as any,
+        ]);
 
-        const hits = (response.results[0]?.hits as BlogPost[]) || [];
+        // Properly type the response and access hits
+        const searchResults = response.results[0] as SearchResponse<BlogPost>;
+        const hits = searchResults?.hits || [];
+
         setResults(hits);
         searchCache.set(query, hits);
       } catch (error) {

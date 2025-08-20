@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@algolia/client-search':
+        specifier: ^5.35.0
+        version: 5.35.0
       '@sanity/client':
         specifier: ^7.6.0
         version: 7.6.0(debug@4.4.0)
