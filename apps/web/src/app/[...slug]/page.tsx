@@ -25,8 +25,13 @@ interface SlugPageParams {
   slug: string[];
 }
 
-export async function generateMetadata({ params }: { params: SlugPageParams }) {
-  const slugString = params.slug.join("/");
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<SlugPageParams>;
+}) {
+  const resolvedParams = await params;
+  const slugString = resolvedParams.slug.join("/");
   const { data: pageData } = await fetchSlugPageData(slugString, false);
 
   return getSEOMetadata(
@@ -46,9 +51,14 @@ export async function generateStaticParams(): Promise<SlugPageParams[]> {
   return await fetchSlugPagePaths();
 }
 
-// ✅ use typed props instead of inline object
-export default async function SlugPage({ params }: { params: SlugPageParams }) {
-  const slugString = params.slug.join("/");
+// ✅ use typed props with Promise
+export default async function SlugPage({
+  params,
+}: {
+  params: Promise<SlugPageParams>;
+}) {
+  const resolvedParams = await params;
+  const slugString = resolvedParams.slug.join("/");
   const { data: pageData } = await fetchSlugPageData(slugString);
 
   if (!pageData) return notFound();
