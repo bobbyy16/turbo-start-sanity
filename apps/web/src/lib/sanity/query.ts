@@ -1,4 +1,4 @@
-import { defineQuery } from "next-sanity";
+import { defineQuery, groq } from "next-sanity";
 
 // Base fragments for reusable query parts
 const imageFragment = /* groq */ `
@@ -46,6 +46,17 @@ const blogAuthorFragment = /* groq */ `
   }
 `;
 
+// ✅ Pokemon fragment
+const pokemonFragment = /* groq */ `
+  featuredPokemon{
+    _type,
+    name,
+    id,
+    sprite,
+    types
+  }
+`;
+
 const blogCardFragment = /* groq */ `
   _type,
   _id,
@@ -55,6 +66,7 @@ const blogCardFragment = /* groq */ `
   richText,
   orderRank,
   ${imageFragment},
+  ${pokemonFragment},
   publishedAt,
   ${blogAuthorFragment}
 `;
@@ -82,6 +94,7 @@ const ctaBlock = /* groq */ `
     ${buttonsFragment},
   }
 `;
+
 const imageLinkCardsBlock = /* groq */ `
   _type == "imageLinkCards" => {
     ...,
@@ -173,9 +186,7 @@ const pageBuilderFragment = /* groq */ `
 `;
 
 /**
- * Query to extract a single image from a page document
- * This is used as a type reference only and not for actual data fetching
- * Helps with TypeScript inference for image objects
+ * Queries
  */
 export const queryImageType = defineQuery(`
   *[_type == "page" && defined(image)][0]{
@@ -185,14 +196,14 @@ export const queryImageType = defineQuery(`
 
 export const queryHomePageData =
   defineQuery(`*[_type == "homePage" && _id == "homePage"][0]{
-    ...,
-    _id,
-    _type,
-    "slug": slug.current,
-    title,
-    description,
-    ${pageBuilderFragment}
-  }`);
+  ...,
+  _id,
+  _type,
+  "slug": slug.current,
+  title,
+  description,
+  ${pageBuilderFragment}
+}`);
 
 export const querySlugPageData = defineQuery(`
   *[_type == "page" && slug.current == $slug][0]{
@@ -200,7 +211,7 @@ export const querySlugPageData = defineQuery(`
     "slug": slug.current,
     ${pageBuilderFragment}
   }
-  `);
+`);
 
 export const querySlugPagePaths = defineQuery(`
   *[_type == "page" && defined(slug.current)].slug.current
@@ -218,26 +229,68 @@ export const queryBlogIndexPageData = defineQuery(`
     ${pageBuilderFragment},
     "slug": slug.current,
     "blogs": *[_type == "blog" && (seoHideFromLists != true)] | order(orderRank asc){
-      ${blogCardFragment}
+      ${blogCardFragment},
+      categories[]->{
+        _id,
+        title,
+        "slug": slug.current
+      }
     }
   }
 `);
 
 export const queryBlogSlugPageData = defineQuery(`
   *[_type == "blog" && slug.current == $slug][0]{
-    ...,
+    _id,
+    _type,
+    title,
+    description,
     "slug": slug.current,
-    ${blogAuthorFragment},
     ${imageFragment},
     ${richTextFragment},
-    ${pageBuilderFragment}
+    publishedAt,
+    ${blogAuthorFragment},
+    featuredPokemon->{
+      _id,
+      _type,
+      pokemon {
+        _type,
+        id,
+        name,
+        sprite,
+        types
+      }
+    }
   }
 `);
-
 export const queryBlogPaths = defineQuery(`
   *[_type == "blog" && defined(slug.current)].slug.current
 `);
 
+// ✅ Pokemon-specific queries
+export const queryBlogsByPokemon = defineQuery(`
+  *[_type == "blog" && defined(featuredPokemon) && featuredPokemon.name == $pokemonName] | order(publishedAt desc) {
+    ${blogCardFragment},
+    categories[]->{
+      _id,
+      title,
+      "slug": slug.current
+    }
+  }
+`);
+
+export const queryFeaturedPokemonBlogs = defineQuery(`
+  *[_type == "blog" && defined(featuredPokemon)] | order(publishedAt desc) [0..5] {
+    ${blogCardFragment},
+    categories[]->{
+      _id,
+      title,
+      "slug": slug.current
+    }
+  }
+`);
+
+// ✅ OG meta fields
 const ogFieldsFragment = /* groq */ `
   _id,
   _type,
@@ -262,7 +315,7 @@ export const queryHomePageOGData = defineQuery(`
   *[_type == "homePage" && _id == $id][0]{
     ${ogFieldsFragment}
   }
-  `);
+`);
 
 export const querySlugPageOGData = defineQuery(`
   *[_type == "page" && _id == $id][0]{
@@ -286,10 +339,10 @@ export const queryFooterData = defineQuery(`
   *[_type == "footer" && _id == "footer"][0]{
     _id,
     subtitle,
-    columns[]{
+    columns[] {
       _key,
       title,
-      links[]{
+      links[] {
         _key,
         name,
         "openInNewTab": url.openInNewTab,
@@ -306,12 +359,12 @@ export const queryFooterData = defineQuery(`
 export const queryNavbarData = defineQuery(`
   *[_type == "navbar" && _id == "navbar"][0]{
     _id,
-    columns[]{
+    columns[] {
       _key,
       _type == "navbarColumn" => {
         "type": "column",
         title,
-        links[]{
+        links[] {
           _key,
           name,
           icon,
@@ -350,6 +403,7 @@ export const querySitemapData = defineQuery(`{
     "lastModified": _updatedAt
   }
 }`);
+
 export const queryGlobalSeoSettings = defineQuery(`
   *[_type == "settings"][0]{
     _id,
@@ -364,7 +418,7 @@ export const queryGlobalSeoSettings = defineQuery(`
       }
     },
     siteDescription,
-    socialLinks{
+    socialLinks {
       linkedin,
       facebook,
       twitter,
@@ -385,3 +439,73 @@ export const querySettingsData = defineQuery(`
     "contactEmail": contactEmail,
   }
 `);
+
+// ✅ Categories
+export const queryAllCategories = groq`
+  *[_type == "category"] | order(title asc) {
+    _id,
+    title,
+    slug,
+    description,
+    "postCount": count(*[_type == "blog" && references(^._id)])
+  }
+`;
+
+export const queryCategoryBySlug = groq`
+  *[_type == "category" && slug.current == $slug][0] {
+    _id,
+    title,
+    slug,
+    description,
+    seoTitle,
+    seoDescription,
+    "postCount": count(*[_type == "blog" && references(^._id)])
+  }
+`;
+
+export const queryBlogPostsByCategory = groq`
+  {
+    "posts": *[_type == "blog" && references($categoryId)] | order(publishedAt desc) [$start...$end] {
+      _id,
+      title,
+      slug,
+      excerpt,
+      publishedAt,
+      mainImage,
+      ${pokemonFragment},
+      author-> {
+        name,
+        image
+      },
+      categories[]-> {
+        _id,
+        title,
+        slug
+      }
+    },
+    "totalPosts": count(*[_type == "blog" && references($categoryId)]),
+    "category": *[_type == "category" && _id == $categoryId][0] {
+      _id,
+      title,
+      slug,
+      description,
+      seoTitle,
+      seoDescription
+    }
+  }
+`;
+
+export const blogPostQuery = groq`
+  *[_type == "blog" && slug.current == $slug][0] {
+    ...,
+    featuredPokemon-> {
+      pokemon {
+        name,
+        id,
+        sprite,
+        types[]
+      }
+    },
+    // ... other fields
+  }
+`;

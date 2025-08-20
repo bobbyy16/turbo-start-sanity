@@ -128,12 +128,30 @@ export const blog = defineType({
       },
     }),
     defineField({
+      name: "featuredPokemon",
+      title: "Featured Pokémon",
+      type: "reference",
+      to: [{ type: "pokedex" }], // Reference to pokedex documents
+      options: {
+        disableNew: true, // Force selection from existing Pokémon
+      },
+    }),
+
+    defineField({
       name: "richText",
       type: "richText",
       description:
         "The main content of your blog post with text, images, and formatting",
       group: GROUP.MAIN_CONTENT,
     }),
+    defineField({
+      name: "categories",
+      title: "Categories",
+      type: "array",
+      of: [{ type: "reference", to: [{ type: "category" }] }],
+      validation: (rule) => rule.min(1).error("At least one category required"),
+    }),
+
     ...seoFields,
     ...ogFields,
   ],

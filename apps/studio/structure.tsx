@@ -1,3 +1,5 @@
+// apps/studio/structure.ts
+import React from "react";
 import { orderableDocumentListDeskItem } from "@sanity/orderable-document-list";
 import {
   BookMarked,
@@ -5,18 +7,16 @@ import {
   File,
   FileText,
   HomeIcon,
-  type LucideIcon,
   MessageCircleQuestion,
   PanelBottomIcon,
   PanelTopDashedIcon,
   Settings2,
   User,
+  TagsIcon,
+  BugIcon,
+  LucideIcon,
 } from "lucide-react";
-import type {
-  StructureBuilder,
-  StructureResolverContext,
-} from "sanity/structure";
-
+import type { StructureBuilder, StructureResolverContext } from "sanity/structure";
 import type { SchemaType, SingletonType } from "./schemaTypes";
 import { getTitleCase } from "./utils/helper";
 
@@ -25,7 +25,7 @@ type Base<T = SchemaType> = {
   type: T;
   preview?: boolean;
   title?: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.ComponentType<any>;
 };
 
 type CreateSingleTon = {
@@ -43,11 +43,6 @@ const createSingleTon = ({ S, type, title, icon }: CreateSingleTon) => {
 type CreateList = {
   S: StructureBuilder;
 } & Base;
-
-// This function creates a list item for a type. It takes a StructureBuilder instance (S),
-// a type, an icon, and a title as parameters. It generates a title for the type if not provided,
-// and uses a default icon if not provided. It then returns a list item with the generated or
-// provided title and icon.
 
 const createList = ({ S, type, icon, title, id }: CreateList) => {
   const newTitle = title ?? getTitleCase(type);
@@ -72,6 +67,7 @@ const createIndexListWithOrderableItems = ({
 }: CreateIndexList) => {
   const indexTitle = index.title ?? getTitleCase(index.type);
   const listTitle = list.title ?? getTitleCase(list.type);
+
   return S.listItem()
     .title(listTitle)
     .icon(index.icon ?? File)
@@ -86,43 +82,70 @@ const createIndexListWithOrderableItems = ({
               S.document()
                 .views([S.view.form()])
                 .schemaType(index.type)
-                .documentId(index.type),
+                .documentId(index.type)
             ),
           orderableDocumentListDeskItem({
             type: list.type,
             S,
             context,
             icon: list.icon ?? File,
-            title: `${listTitle}`,
+            title: listTitle,
           }),
-        ]),
+          S.listItem()
+            .title("Categories")
+            .icon(TagsIcon)
+            .child(S.documentTypeList("category").title("Categories")),
+        ])
     );
 };
 
-export const structure = (
-  S: StructureBuilder,
-  context: StructureResolverContext,
-) => {
+export const structure = (S: StructureBuilder, context: StructureResolverContext) => {
   return S.list()
     .title("Content")
     .items([
+      // 1. Home Page
       createSingleTon({ S, type: "homePage", icon: HomeIcon }),
       S.divider(),
+
+      // 2. Regular Pages
       createList({ S, type: "page", title: "Pages" }),
+
+      // 3. Blog Section (with orderable posts)
       createIndexListWithOrderableItems({
         S,
         index: { type: "blogIndex", icon: BookMarked },
-        list: { type: "blog", title: "Blogs", icon: FileText },
+        list: { type: "blog", title: "Blog Posts", icon: FileText },
         context,
       }),
-      createList({
-        S,
-        type: "faq",
-        title: "FAQs",
-        icon: MessageCircleQuestion,
-      }),
+
+      // 4. FAQs
+      createList({ S, type: "faq", title: "FAQs", icon: MessageCircleQuestion }),
+
+      // 5. Authors
       createList({ S, type: "author", title: "Authors", icon: User }),
-      S.divider(),
+
+      // 6. Pokédex
+     S.listItem()
+  .title("Pokédex")
+  .icon(BugIcon)
+  .child(
+    S.documentList()
+      .title("Pokémon Collection")
+      .schemaType("pokedex")
+      .filter('_type == "pokedex"')
+      .child((documentId) =>
+        S.document()
+          .documentId(documentId)
+          .schemaType("pokedex")
+          .views([
+            S.view.form(),
+            S.view
+              .component(() => <div>Pokémon-Details-View</div>)
+              .title("Details"),
+          ])
+      )
+  ),
+      // 7. Site Configuration
       S.listItem()
         .title("Site Configuration")
         .icon(Settings2)
@@ -130,25 +153,10 @@ export const structure = (
           S.list()
             .title("Site Configuration")
             .items([
-              createSingleTon({
-                S,
-                type: "navbar",
-                title: "Navigation",
-                icon: PanelTopDashedIcon,
-              }),
-              createSingleTon({
-                S,
-                type: "footer",
-                title: "Footer",
-                icon: PanelBottomIcon,
-              }),
-              createSingleTon({
-                S,
-                type: "settings",
-                title: "Global Settings",
-                icon: CogIcon,
-              }),
-            ]),
+              createSingleTon({ S, type: "navbar", title: "Navigation", icon: PanelTopDashedIcon }),
+              createSingleTon({ S, type: "footer", title: "Footer", icon: PanelBottomIcon }),
+              createSingleTon({ S, type: "settings", title: "Global Settings", icon: CogIcon }),
+            ])
         ),
     ]);
 };
