@@ -1,7 +1,8 @@
 // scripts/indexToAlgolia.ts
 import * as dotenv from "dotenv";
 dotenv.config({ path: "./.env.local" });
-import { algoliasearch } from "algoliasearch"; // ✅ correct import
+
+import { algoliasearch } from "algoliasearch";
 import { createClient } from "@sanity/client";
 
 const sanityClient = createClient({
@@ -17,35 +18,39 @@ const algolia = algoliasearch(
   process.env.ALGOLIA_ADMIN_API_KEY!,
 );
 
+const indexName = "blogs_with_relations";
+
 async function run() {
   try {
-    console.log("🔄 Fetching blogs with categories + Pokémon...");
-    const blogs = await sanityClient.fetch(`
-  *[_type == "blog"]{
-    _id,
-    title,
-    "slug": slug.current,
-    excerpt,
-    publishedAt,
-    categories[]->{
-      _id,
-      title,
-      "slug": slug.current,
-      description,
-      seo
-    },
-    featuredPokemon->{
-      pokemon {
-        id,
-        name,
-        sprite,
-        types
-      }
-    }
-  }
-`);
+    console.log("🔄 Fetching published blogs with categories + Pokémon...");
 
-    console.log(`📝 Found ${blogs.length} blogs`);
+    // ✅ skip drafts directly in GROQ query
+    const blogs = await sanityClient.fetch(`
+      *[_type == "blog" && !(_id in path("drafts.**"))]{
+        _id,
+        title,
+        "slug": slug.current,
+        excerpt,
+        publishedAt,
+        categories[]->{
+          _id,
+          title,
+          "slug": slug.current,
+          description,
+          seo
+        },
+        featuredPokemon->{
+          pokemon {
+            id,
+            name,
+            sprite,
+            types
+          }
+        }
+      }
+    `);
+
+    console.log(`📝 Found ${blogs.length} published blogs`);
 
     const blogObjects = blogs.map((post: any) => ({
       objectID: post._id,
@@ -71,21 +76,19 @@ async function run() {
     }));
 
     console.log(
-      "📝 Example blog object with embedded category & Pokémon:",
+      "📝 Example blog object:",
       JSON.stringify(blogObjects[0], null, 2),
     );
 
     if (blogObjects.length > 0) {
-      console.log(
-        "🚀 Indexing blogs with categories + Pokémon into Algolia...",
-      );
-      const result = await algolia.saveObjects({
-        indexName: "blogs_with_relations",
+      console.log("🚀 Replacing Algolia index with published blogs...");
+      const result = await algolia.replaceAllObjects({
+        indexName,
         objects: blogObjects,
       });
-      console.log("✅ Indexing result:", result);
+      console.log("✅ Reindex complete:", result);
     } else {
-      console.log("⚠️ No blogs to index");
+      console.log("⚠️ No published blogs to index");
     }
   } catch (error) {
     console.error("❌ Error indexing to Algolia:", error);
