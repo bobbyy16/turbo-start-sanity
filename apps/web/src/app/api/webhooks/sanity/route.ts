@@ -1,204 +1,89 @@
-import { NextRequest, NextResponse } from "next/server";
-import { algoliasearch } from "algoliasearch";
+// /pages/api/sanity-webhook.ts (Next.js API route)
+import type { NextApiRequest, NextApiResponse } from "next";
+import algoliasearch from "algoliasearch";
 import { createClient } from "@sanity/client";
 
-const sanityClient = createClient({
+const sanity = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
-  token: process.env.SANITY_API_READ_TOKEN!,
-  apiVersion: process.env.NEXT_PUBLIC_SANITY_API_VERSION!,
+  apiVersion: "2023-05-01",
   useCdn: false,
+  token: process.env.SANITY_API_READ_TOKEN!,
 });
 
 const algolia = algoliasearch(
   process.env.NEXT_PUBLIC_ALGOLIA_APP_ID!,
-  process.env.ALGOLIA_ADMIN_API_KEY!,
+  process.env.ALGOLIA_ADMIN_KEY!,
 );
+const index = algolia.initIndex("blogs_with_relations");
 
-const recentlyProcessed = new Map<string, number>();
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Method not allowed" });
+  }
 
-export async function POST(request: NextRequest) {
   try {
-    const payload = await request.json();
-    const documentId = payload._id;
-    const documentType = payload._type;
+    const { _id, _type, event } = req.body;
 
-    const now = Date.now();
-    if (recentlyProcessed.has(documentId)) {
-      const lastProcessed = recentlyProcessed.get(documentId)!;
-      if (now - lastProcessed < 10000) {
-        return NextResponse.json({ message: "Duplicate skipped" });
-      }
-    }
-    recentlyProcessed.set(documentId, now);
-
-    // ===== BLOG =====
-    if (documentType === "blog") {
-      const post = await sanityClient.fetch(
-        `*[_type == "blog" && _id == $id][0]{
-          _id,
-          title,
-          "slug": slug.current,
-          excerpt,
-          publishedAt,
-          categories[]->{
-            _id,
-            title,
-            "slug": slug.current
-          },
-          featuredPokemon->{
-            pokemon {
-              id,
-              name,
-              sprite,
-              types
-            }
-          }
-        }`,
-        { id: documentId },
-      );
-
-      if (!post || !post.publishedAt) {
-        await algolia.deleteObject({
-          indexName: "blogs_with_relations",
-          objectID: documentId,
-        });
-        return NextResponse.json({
-          message: "Blog removed from unified index",
-        });
-      }
-
-      await algolia.saveObjects({
-        indexName: "blogs_with_relations",
-        objects: [
-          {
-            objectID: post._id,
-            type: "blog",
-            title: post.title,
-            slug: post.slug,
-            excerpt: post.excerpt,
-            publishedAt: post.publishedAt,
-            categories:
-              post.categories?.map((c: any) => ({
-                id: c._id,
-                title: c.title,
-                slug: c.slug,
-              })) || [],
-            featuredPokemon: post.featuredPokemon?.pokemon
-              ? {
-                  id: post.featuredPokemon.pokemon.id ?? null,
-                  name: post.featuredPokemon.pokemon.name ?? null,
-                  sprite: post.featuredPokemon.pokemon.sprite ?? null,
-                  types: post.featuredPokemon.pokemon.types ?? [],
-                }
-              : { id: null, name: null, sprite: null, types: [] },
-            _searchableText: `${post.title} ${post.excerpt} ${post.categories?.map((c: any) => c.title).join(" ") || ""} ${post.featuredPokemon?.pokemon?.name || ""}`,
-          },
-        ],
-      });
-
-      return NextResponse.json({
-        message: "Blog indexed successfully in unified index",
-      });
+    if (_type !== "blog") {
+      return res.status(200).json({ message: "Ignored non-blog doc" });
     }
 
-    // ===== CATEGORY =====
-    if (documentType === "category") {
-      const cat = await sanityClient.fetch(
-        `*[_type == "category" && _id == $id][0]{
+    if (event === "delete") {
+      await index.deleteObject(_id);
+      return res.status(200).json({ message: `Deleted blog ${_id}` });
+    }
+
+    // 👇 fetch full blog with relations like indexToAlgolia
+    const blog = await sanity.fetch(
+      `*[_type == "blog" && _id == $id][0]{
+        _id,
+        title,
+        "slug": slug.current,
+        excerpt,
+        publishedAt,
+        categories[]->{
           _id,
           title,
           "slug": slug.current,
           description,
           seo
-        }`,
-        { id: documentId },
-      );
+        },
+        featuredPokemon->{
+          id,
+          name,
+          sprite,
+          types
+        }
+      }`,
+      { id: _id },
+    );
 
-      if (!cat) {
-        await algolia.deleteObject({
-          indexName: "blogs_with_relations",
-          objectID: documentId,
-        });
-        return NextResponse.json({
-          message: "Category removed from unified index",
-        });
-      }
-
-      await algolia.saveObjects({
-        indexName: "blogs_with_relations",
-        objects: [
-          {
-            objectID: cat._id,
-            type: "category",
-            title: cat.title,
-            slug: cat.slug,
-            description: cat.description,
-            seo: cat.seo,
-            _searchableText: `${cat.title} ${cat.description || ""}`,
-          },
-        ],
-      });
-
-      return NextResponse.json({
-        message: "Category indexed successfully in unified index",
-      });
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
     }
 
-    // ===== POKEDEX =====
-    if (documentType === "pokedex") {
-      const poke = await sanityClient.fetch(
-        `*[_type == "pokedex" && _id == $id][0]{
-          _id,
-          pokemon {
-            id,
-            name,
-            sprite,
-            types
-          }
-        }`,
-        { id: documentId },
-      );
+    // 👇 shape exactly like indexToAlgolia
+    const mappedDoc = {
+      objectID: blog._id,
+      title: blog.title,
+      slug: `/${blog.slug}`,
+      excerpt: blog.excerpt,
+      publishedAt: blog.publishedAt,
+      categories: blog.categories || [],
+      featuredPokemon: blog.featuredPokemon || null,
+    };
 
-      if (!poke || !poke.pokemon?.id) {
-        await algolia.deleteObject({
-          indexName: "blogs_with_relations",
-          objectID: documentId,
-        });
-        return NextResponse.json({
-          message: "Pokémon removed from unified index",
-        });
-      }
+    await index.saveObject(mappedDoc);
 
-      await algolia.saveObjects({
-        indexName: "blogs_with_relations",
-        objects: [
-          {
-            objectID: poke._id,
-            type: "pokemon",
-            pokemonId: poke.pokemon.id,
-            name: poke.pokemon.name,
-            sprite: poke.pokemon.sprite,
-            types: poke.pokemon.types || [],
-            _searchableText: `${poke.pokemon.name || ""} ${poke.pokemon.types?.join(" ") || ""}`,
-          },
-        ],
-      });
-
-      return NextResponse.json({
-        message: "Pokémon indexed successfully in unified index",
-      });
-    }
-
-    return NextResponse.json({
-      message: "Ignored: not blog, category, or pokedex",
-    });
-  } catch (error) {
+    return res.status(200).json({ message: "Indexed blog", blog: mappedDoc });
+  } catch (error: any) {
     console.error("Webhook error:", error);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return res
+      .status(500)
+      .json({ message: "Error handling webhook", error: error.message });
   }
-}
-
-export async function GET() {
-  return NextResponse.json({ message: "Unified webhook endpoint working" });
 }
